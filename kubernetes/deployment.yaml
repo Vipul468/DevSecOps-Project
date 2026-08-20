@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prime-clone
+  namespace: prime-clone
+  labels:
+    app: prime-clone
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: prime-clone
+  template:
+    metadata:
+      labels:
+        app: prime-clone
+    spec:
+      containers:
+        - name: prime-clone
+          # Jenkins rewrites this line each build (GitOps bump):
+          image: 123456789012.dkr.ecr.us-east-1.amazonaws.com/prime-clone:1
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet: { path: /healthz, port: 80 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 80 }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            requests: { cpu: "100m", memory: "128Mi" }
+            limits:   { cpu: "500m", memory: "256Mi" }

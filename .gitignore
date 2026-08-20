@@ -1,0 +1,15 @@
+# terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/.terraform.lock.hcl
+terraform/terraform.tfvars
+
+# node / build
+app/node_modules/
+app/dist/
+
+# reports & secrets
+*-report.txt
+*.pem
+.env

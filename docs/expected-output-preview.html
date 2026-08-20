@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Node Exporter Full — System Monitoring</title>
+<style>
+  :root{--mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;--font:"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  html[data-theme="dark"]{
+    --bg:#0f171e;--bg2:#0b1218;--surf:#1a242f;--surf2:#232f3e;--line:#2a3949;
+    --ink:#fff;--mut:#aab7c4;--dim:#6f8296;
+    --prime:#1399ff;--prime2:#00a8e1;
+    --good:#4bd07f;--goodbg:#123528;--warn:#f0b429;--amber:#f59e3c;--crit:#ff5a5f;
+    --grid:#1e2a37;--shadow:0 10px 30px rgba(0,0,0,.45)}
+  html[data-theme="light"]{
+    --bg:#eef3f8;--bg2:#fff;--surf:#fff;--surf2:#f4f8fc;--line:#d8e2ec;
+    --ink:#0b1a2b;--mut:#4a5f75;--dim:#8195a8;
+    --prime:#0a6fd6;--prime2:#0089c7;
+    --good:#1f9d57;--goodbg:#dcf3e6;--warn:#c98a00;--amber:#d9741f;--crit:#d83a3f;
+    --grid:#e3ebf3;--shadow:0 8px 24px rgba(20,60,110,.12)}
+  *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);font-size:13px;transition:background .3s,color .3s}
+  .wrap{max-width:1300px;margin:0 auto;padding:16px 20px 40px}
+
+  /* top bar */
+  .bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .bc{display:flex;align-items:center;gap:8px;font-weight:700;font-size:16px}
+  .bc .g{color:var(--amber);font-size:20px}
+  .crumb{color:var(--dim);font-weight:400;font-size:13px}
+  .bar .sp{flex:1}
+  .chip{display:flex;align-items:center;gap:7px;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:7px 11px;font-size:12px}
+  .chip .k{color:var(--dim)}.chip .v{font-family:var(--mono);font-weight:600}
+  .chip.live .dot{width:8px;height:8px;border-radius:50%;background:var(--good);box-shadow:0 0 8px var(--good);animation:pulse 2s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  .toggle{cursor:pointer;background:var(--surf);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:14px}
+
+  .sec{font-size:13px;color:var(--mut);font-weight:600;margin:18px 0 10px;display:flex;align-items:center;gap:8px}
+  .sec::before{content:"▾";color:var(--dim)}
+
+  /* quick row */
+  .quick{display:grid;grid-template-columns:1.1fr repeat(4,1fr) .8fr 1fr;gap:12px}
+  @media(max-width:1080px){.quick{grid-template-columns:repeat(4,1fr)}}
+  @media(max-width:640px){.quick{grid-template-columns:repeat(2,1fr)}}
+  .panel{background:var(--surf);border:1px solid var(--line);border-radius:12px;padding:13px;box-shadow:var(--shadow)}
+  .panel .t{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;display:flex;align-items:center;gap:5px}
+  .panel .t .i{opacity:.5;font-size:10px}
+
+  /* pressure meters */
+  .press .row{display:grid;grid-template-columns:34px 1fr 40px;align-items:center;gap:8px;margin:7px 0}
+  .press .lab{font-size:11px;color:var(--mut)}
+  .press .track{height:9px;background:var(--bg);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+  .press .fill{height:100%;background:var(--good);border-radius:6px;width:0;transition:width 1s}
+  .press .val{font-family:var(--mono);font-size:11px;text-align:right;color:var(--mut)}
+
+  /* gauge */
+  .gauge{display:flex;flex-direction:column;align-items:center}
+  .gauge svg{display:block}
+  .gauge .num{font-family:var(--mono);font-weight:700;font-size:19px}
+
+  /* stat tiles */
+  .statbig{font-family:var(--mono);font-weight:700;font-size:26px;letter-spacing:-.5px}
+  .statsub{color:var(--dim);font-size:11px;margin-top:3px}
+  .ministack{display:flex;flex-direction:column;gap:8px}
+  .mini{display:flex;justify-content:space-between;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
+  .mini .ml{font-size:11px;color:var(--mut)}.mini .mv{font-family:var(--mono);font-weight:700;font-size:14px}
+
+  /* charts */
+  .charts{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:820px){.charts{grid-template-columns:1fr}}
+  .chart .ch-h{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+  .chart .ch-h .ttl{font-size:13px;font-weight:600}
+  .legend{display:flex;gap:12px;flex-wrap:wrap;font-size:11px;color:var(--mut);margin-top:8px}
+  .legend span{display:inline-flex;align-items:center;gap:6px}
+  .legend .sw{width:10px;height:3px;border-radius:2px}
+  .tip{position:fixed;pointer-events:none;background:var(--surf2);border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:11px;font-family:var(--mono);box-shadow:var(--shadow);opacity:0;transition:opacity .12s;z-index:50;white-space:nowrap}
+
+  footer{color:var(--dim);font-size:11px;margin-top:22px;text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="bar">
+    <div class="bc"><span class="g">◎</span> Node Exporter Full <span class="crumb">&nbsp;/ System Monitoring</span></div>
+    <div class="sp"></div>
+    <div class="chip"><span class="k">Job</span><span class="v">node-exporter</span></div>
+    <div class="chip"><span class="k">Host</span><span class="v">10.0.3.227:9100</span></div>
+    <div class="chip live"><span class="dot"></span><span class="k">Last 5m · refresh</span><span class="v">5s</span></div>
+    <div class="toggle" id="tg" title="Light / dark">&#9789;</div>
+  </div>
+
+  <div class="sec">Quick CPU / Mem / Disk</div>
+  <div class="quick">
+    <!-- Pressure -->
+    <div class="panel press">
+      <div class="t">Pressure <span class="i">ⓘ</span></div>
+      <div class="row"><span class="lab">CPU</span><span class="track"><span class="fill" data-w="1.5"></span></span><span class="val">1.5%</span></div>
+      <div class="row"><span class="lab">Mem</span><span class="track"><span class="fill" data-w="0"></span></span><span class="val">0.0%</span></div>
+      <div class="row"><span class="lab">I/O</span><span class="track"><span class="fill" data-w="0"></span></span><span class="val">0.0%</span></div>
+    </div>
+    <!-- CPU Busy gauge -->
+    <div class="panel"><div class="t">CPU Busy <span class="i">ⓘ</span></div><div class="gauge" data-val="3.7" data-max="100" data-color="good" data-fmt="%"></div></div>
+    <!-- Sys Load -->
+    <div class="panel"><div class="t">Sys Load <span class="i">ⓘ</span></div><div class="gauge" data-val="4.0" data-max="100" data-color="good" data-fmt="%"></div></div>
+    <!-- RAM Used -->
+    <div class="panel"><div class="t">RAM Used <span class="i">ⓘ</span></div><div class="gauge" data-val="35.2" data-max="100" data-color="good" data-fmt="%"></div></div>
+    <!-- Root FS -->
+    <div class="panel"><div class="t">Root FS Used <span class="i">ⓘ</span></div><div class="gauge" data-val="22.6" data-max="100" data-color="good" data-fmt="%"></div></div>
+    <!-- SWAP N/A -->
+    <div class="panel"><div class="t">SWAP Used <span class="i">ⓘ</span></div><div class="gauge" data-val="0" data-max="100" data-color="crit" data-na="1"></div></div>
+    <!-- CPU cores + uptime + mini -->
+    <div class="panel">
+      <div class="t">Cores · Uptime</div>
+      <div style="display:flex;gap:14px;align-items:flex-start;margin-bottom:8px">
+        <div><div class="statbig" style="color:var(--prime)">2</div><div class="statsub">CPU cores</div></div>
+        <div><div class="statbig">42.6<span style="font-size:13px;color:var(--dim)"> min</span></div><div class="statsub">Uptime</div></div>
+      </div>
+      <div class="ministack">
+        <div class="mini"><span class="ml">RAM Total</span><span class="mv">20 GiB</span></div>
+        <div class="mini"><span class="ml">RAM Free</span><span class="mv">4 GiB</span></div>
+        <div class="mini"><span class="ml">SWAP</span><span class="mv">0 B</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec">Basic CPU / Mem / Net / Disk</div>
+  <div class="charts">
+    <div class="panel chart">
+      <div class="ch-h"><span class="ttl">CPU Basic</span><span style="font-family:var(--mono);font-size:11px;color:var(--good)">busy ~3.7%</span></div>
+      <svg id="cpuChart" viewBox="0 0 560 210" width="100%" height="210" preserveAspectRatio="none"></svg>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--amber)"></span>Busy System</span>
+        <span><span class="sw" style="background:var(--prime)"></span>Busy User</span>
+        <span><span class="sw" style="background:var(--good)"></span>Idle</span>
+      </div>
+    </div>
+    <div class="panel chart">
+      <div class="ch-h"><span class="ttl">Memory Basic</span><span style="font-family:var(--mono);font-size:11px;color:var(--prime)">used 35.2%</span></div>
+      <svg id="memChart" viewBox="0 0 560 210" width="100%" height="210" preserveAspectRatio="none"></svg>
+      <div class="legend">
+        <span><span class="sw" style="background:var(--prime)"></span>RAM Used</span>
+        <span><span class="sw" style="background:var(--amber)"></span>Cache + Buffer</span>
+        <span><span class="sw" style="background:var(--dim)"></span>Free</span>
+      </div>
+    </div>
+  </div>
+
+  <footer>Node Exporter Full · rebuilt from live panel values · host 10.0.3.227:9100 · job node-exporter</footer>
+</div>
+
+<div class="tip" id="tip"></div>
+
+<script>
+const css=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+/* ---------- gauges ---------- */
+function drawGauge(el){
+  const val=+el.dataset.val, max=+el.dataset.max, na=el.dataset.na==='1';
+  const fmt=el.dataset.fmt||'', colVar=el.dataset.color||'good';
+  const R=52, C=Math.PI*R; //半 circle arc
+  const frac=Math.max(0,Math.min(1,val/max));
+  const col=na?css('--crit'):css('--'+colVar);
+  el.innerHTML=`
+   <svg width="150" height="96" viewBox="0 0 150 96">
+     <path d="M15 88 A60 60 0 0 1 135 88" fill="none" stroke="${css('--bg')}" stroke-width="13" stroke-linecap="round"/>
+     <path d="M15 88 A60 60 0 0 1 135 88" fill="none" stroke="${col}" stroke-width="13" stroke-linecap="round"
+           stroke-dasharray="${C}" stroke-dashoffset="${C}" class="garc"/>
+     <text x="75" y="80" text-anchor="middle" class="num" fill="${na?css('--crit'):css('--ink')}" style="font-family:var(--mono);font-weight:700;font-size:19px">${na?'N/A':val+fmt}</text>
+   </svg>`;
+  const arc=el.querySelector('.garc');
+  requestAnimationFrame(()=>{arc.style.transition='stroke-dashoffset 1.1s ease';arc.style.strokeDashoffset=C-(na?0:frac*C);});
+}
+document.querySelectorAll('.gauge').forEach(drawGauge);
+
+/* ---------- pressure fills ---------- */
+document.querySelectorAll('.press .fill').forEach(f=>setTimeout(()=>f.style.width=Math.max(2,+f.dataset.w)+'%',250));
+
+/* ---------- time series ---------- */
+// deterministic pseudo-random (no Math.random per env rules)
+function seeded(n){let x=Math.sin(n*99.13)*10000;return x-Math.floor(x);}
+const N=60;
+function series(base,amp,seed){return Array.from({length:N},(_,i)=>base+Math.sin(i/6+seed)*amp*0.5+(seeded(i+seed*10)-0.5)*amp);}
+
+function areaChart(svgId, stacks, yMax, unit){
+  const svg=document.getElementById(svgId);
+  const W=560,H=210,pl=38,pr=8,pt=10,pb=22, iw=W-pl-pr, ih=H-pt-pb;
+  const x=i=>pl+ (i/(N-1))*iw;
+  const y=v=>pt+ih-(v/yMax)*ih;
+  let out='';
+  // grid + y labels
+  for(let g=0;g<=4;g++){const gy=pt+ih*(g/4);const gv=(yMax*(1-g/4));
+    out+=`<line x1="${pl}" y1="${gy}" x2="${W-pr}" y2="${gy}" stroke="${css('--grid')}" stroke-width="1"/>`;
+    out+=`<text x="${pl-6}" y="${gy+3}" text-anchor="end" fill="${css('--dim')}" style="font-size:9px;font-family:var(--mono)">${(unit==='%'?Math.round(gv):gv.toFixed(gv<10?1:0))}${unit==='%'?'%':''}</text>`;
+  }
+  // x labels
+  ['10:00:00','10:01:00','10:02:00','10:03:00','10:04:00'].forEach((t,k)=>{
+    out+=`<text x="${pl+iw*(k/4)}" y="${H-6}" text-anchor="middle" fill="${css('--dim')}" style="font-size:9px;font-family:var(--mono)">${t}</text>`;
+  });
+  // stacked areas (bottom to top)
+  let cum=Array(N).fill(0);
+  stacks.forEach(s=>{
+    const top=cum.map((c,i)=>c+s.data[i]);
+    let path=`M${x(0)},${y(cum[0])}`;
+    for(let i=0;i<N;i++)path+=` L${x(i)},${y(top[i])}`;
+    for(let i=N-1;i>=0;i--)path+=` L${x(i)},${y(cum[i])}`;
+    path+='Z';
+    out+=`<path d="${path}" fill="${s.color}" fill-opacity="0.30" stroke="none"/>`;
+    // top line
+    let line=`M${x(0)},${y(top[0])}`;for(let i=1;i<N;i++)line+=` L${x(i)},${y(top[i])}`;
+    out+=`<path d="${line}" fill="none" stroke="${s.color}" stroke-width="1.6"/>`;
+    cum=top;
+  });
+  svg.innerHTML=out;
+}
+
+function build(){
+  // CPU: idle ~92, user ~4, system ~3 (total ~100)
+  const sys=series(3,1.4,1).map(v=>Math.max(0.5,v));
+  const usr=series(4,1.8,3).map(v=>Math.max(0.5,v));
+  const idle=usr.map((u,i)=>Math.max(0,100-u-sys[i]));
+  areaChart('cpuChart',[
+    {name:'sys',color:css('--amber'),data:sys},
+    {name:'usr',color:css('--prime'),data:usr},
+    {name:'idle',color:css('--good'),data:idle},
+  ],100,'%');
+
+  // Memory (GiB, total 20): used ~7 (35.2%), cache ~5, free ~8
+  const used=series(7,0.5,2).map(v=>Math.max(0.2,v));
+  const cache=series(5,0.4,5).map(v=>Math.max(0.2,v));
+  const free=used.map((u,i)=>Math.max(0,20-u-cache[i]));
+  areaChart('memChart',[
+    {name:'used',color:css('--prime'),data:used},
+    {name:'cache',color:css('--amber'),data:cache},
+    {name:'free',color:css('--dim'),data:free},
+  ],20,'GiB');
+}
+build();
+
+/* ---------- theme toggle ---------- */
+const root=document.documentElement, tg=document.getElementById('tg');
+tg.onclick=()=>{
+  root.setAttribute('data-theme', root.getAttribute('data-theme')==='dark'?'light':'dark');
+  tg.innerHTML= root.getAttribute('data-theme')==='dark'?'&#9789;':'&#9728;';
+  // redraw with new theme colors
+  document.querySelectorAll('.gauge').forEach(drawGauge);
+  build();
+};
+
+/* ---------- hover tooltip on charts ---------- */
+const tip=document.getElementById('tip');
+[['cpuChart','CPU','%',[3.7,4.0]],['memChart','MEM','GiB',null]].forEach(([id])=>{
+  const svg=document.getElementById(id);
+  svg.addEventListener('mousemove',e=>{
+    const r=svg.getBoundingClientRect();
+    const rel=(e.clientX-r.left)/r.width;
+    const idx=Math.round(rel*(N-1));
+    const t=['10:00','10:01','10:02','10:03','10:04'][Math.min(4,Math.floor(rel*5))];
+    tip.style.opacity=1;tip.style.left=(e.clientX+12)+'px';tip.style.top=(e.clientY-10)+'px';
+    tip.textContent = id==='cpuChart' ? `t≈${t} · busy ~${(3+seeded(idx)*2).toFixed(1)}%` : `t≈${t} · used ~${(6.8+seeded(idx)*0.6).toFixed(1)} GiB`;
+  });
+  svg.addEventListener('mouseleave',()=>tip.style.opacity=0);
+});
+</script>
+</body>
+</html>

@@ -1,0 +1,53 @@
+# Values for the kube-prometheus-stack Helm chart
+# (Prometheus + node-exporter + Grafana + Alertmanager)
+#
+# This is tuned to reproduce the EXACT "Node Exporter Full" dashboard from the
+# tutorial, auto-provisioned and served on a public AWS ELB URL.
+
+# node-exporter runs on every node and feeds CPU/RAM/Disk metrics -> this is what
+# the "Node Exporter Full" dashboard reads. It is enabled by default; kept explicit:
+nodeExporter:
+  enabled: true
+
+prometheus:
+  service:
+    type: ClusterIP
+  prometheusSpec:
+    retention: 7d
+    resources:
+      requests: { cpu: 200m, memory: 512Mi }
+
+alertmanager:
+  enabled: true
+
+grafana:
+  adminUser: admin
+  adminPassword: "ChangeMe123!"      # <-- change this
+  service:
+    type: LoadBalancer               # gives a PUBLIC AWS ELB URL (like the video)
+  defaultDashboardsEnabled: true
+
+  # Auto-import the "Node Exporter Full" dashboard (Grafana.com ID 1860),
+  # so it shows up under Dashboards with zero manual steps.
+  dashboardProviders:
+    dashboardproviders.yaml:
+      apiVersion: 1
+      providers:
+        - name: 'default'
+          orgId: 1
+          folder: ''
+          type: file
+          disableDeletion: false
+          editable: true
+          options:
+            path: /var/lib/grafana/dashboards/default
+  dashboards:
+    default:
+      node-exporter-full:
+        gnetId: 1860               # "Node Exporter Full"
+        revision: 37
+        datasource: Prometheus
+      kubernetes-cluster:
+        gnetId: 315                # handy K8s cluster overview
+        revision: 3
+        datasource: Prometheus
